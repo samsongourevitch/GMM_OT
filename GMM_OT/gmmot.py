@@ -290,5 +290,7 @@ def fit_and_transport(X_1, X_2, n_comp_1=10, n_comp_2=10, method='rand'):
         X_transported = transport_gmm_rand(means0, covs0, weights0, means1, covs1, weights1, w_star, X_1)
     elif method == "mean":
         X_transported = transport_gmm_mean(means0, covs0, weights0, means1, covs1, weights1, w_star, X_1)
+    elif method == "mode":
+        X_transported = transport_gmm_mode(means0, covs0, weights0, means1, covs1, weights1, w_star, X_1)
 
     return X_transported
