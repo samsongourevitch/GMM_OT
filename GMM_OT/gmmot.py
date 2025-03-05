@@ -143,6 +143,47 @@ def transport_gmm_rand(means0, covs0, weights0, means1, covs1, weights1, w_star,
 
     return X_transported
 
+def transport_gmm_mode(means0, covs0, weights0, means1, covs1, weights1, w_star, X):
+    """Transport a sample X from GMM 0 to GMM 1."""
+    K0, K1 = len(weights0), len(weights1)
+    N, D = X.shape  # N = number of points, D = data dimensionality
+
+    # Compute Gaussian densities for all components of GMM0 at points X
+    densities = np.zeros((K0, N))
+
+    # Compute densities using scipy's optimized multivariate_normal
+    densities = np.zeros((K0, N))
+    for k in range(K0):
+        mvn = multivariate_normal(mean=means0[k], cov=covs0[k])
+        densities[k] = mvn.pdf(X)
+
+    # Weighted sum for denominator (p(x))
+    denum = np.dot(weights0, densities)  # (N,)
+
+    # Compute joint probabilities p(k, l | x)
+    probas = np.zeros((K0, K1, N))
+    for k in range(K0):
+        for l in range(K1):
+            probas[k, l] = w_star[k, l] * densities[k] / denum
+    
+    probas = probas.reshape(K0 * K1, N)
+
+    # Compute all possible transport maps
+    transports = np.zeros((K0, K1, D, N))
+    for k in range(K0):
+        for l in range(K1):
+            transports[k, l] = compute_transport_gaussian(means0[k], covs0[k], means1[l], covs1[l], X)
+    
+    transports = transports.reshape(K0 * K1, D, N)
+
+    # Sample transported points for each X by choosing the max probability
+    X_transported = np.array([
+        transports[np.argmax(probas[:, i]), :, i]
+        for i in range(N)
+    ])
+
+    return X_transported
+
 def transport_gmm_rand_1(means0, covs0, weights0, means1, covs1, weights1, w_star, X):
     """Transport a sample X from GMM 0 to GMM 1."""
     K0, K1 = len(weights0), len(weights1)
