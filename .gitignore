@@ -3,3 +3,6 @@ venv/
 
 # MNIST data
 MNIST
+
+# Images
+*.png

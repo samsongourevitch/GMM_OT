@@ -4,7 +4,12 @@ from sklearn.datasets import make_moons
 from scipy.stats import multivariate_normal
 from sklearn.mixture import GaussianMixture
 from scipy.linalg import sqrtm, inv
+from scipy.special import logsumexp
 import ot
+
+def compute_transport_cost(X, X_transported):
+    """Compute the transport cost between two sets of points."""
+    return np.sum(np.linalg.norm(X - X_transported, axis=1) ** 2)
 
 def wasserstein_gaussian(mu0, Sigma0, mu1, Sigma1):
     """Compute squared Wasserstein-2 distance between two Gaussians."""
@@ -101,6 +106,27 @@ def transport_gmm_mean(means0, covs0, weights0, means1, covs1, weights1, w_star,
 
     return (num / denum).T
 
+def transport_gmm_mean_optimized(means0, covs0, weights0, means1, covs1, weights1, w_star, X):
+    """Transport a sample X from GMM 0 to GMM 1 efficiently."""
+    K0, K1 = len(weights0), len(weights1)
+    
+    num = np.zeros_like(X, dtype=np.float64)
+    denum = np.zeros(X.shape[0], dtype=np.float64)  # Store denominator values
+
+    for k in range(K0):
+        # Compute log-density to prevent underflow
+        log_density_k = multivariate_normal.logpdf(X, mean=means0[k], cov=covs0[k])
+        gaussian_density_k = np.exp(log_density_k)  # Convert back to probability space
+
+        denum += weights0[k] * gaussian_density_k
+
+        for l in range(K1):
+            # Efficient computation of transport mapping
+            transport_map = compute_transport_gaussian(means0[k], covs0[k], means1[l], covs1[l], X)
+            num += w_star[k, l] * gaussian_density_k[:, None] * transport_map  # Keep shape consistent
+
+    return (num / denum[:, None]).T  # Ensure correct dimensions
+
 def transport_gmm_rand(means0, covs0, weights0, means1, covs1, weights1, w_star, X):
     """Transport a sample X from GMM 0 to GMM 1."""
     K0, K1 = len(weights0), len(weights1)
@@ -184,84 +210,41 @@ def transport_gmm_mode(means0, covs0, weights0, means1, covs1, weights1, w_star,
 
     return X_transported
 
-def transport_gmm_rand_1(means0, covs0, weights0, means1, covs1, weights1, w_star, X):
-    """Transport a sample X from GMM 0 to GMM 1."""
+def transport_gmm_rand_optimized(means0, covs0, weights0, means1, covs1, weights1, w_star, X):
+    """Optimized transport of sample X from GMM 0 to GMM 1."""
     K0, K1 = len(weights0), len(weights1)
-
-    denum = 0
-
-    probas = []
-    for k in range(K0):
-        # get the density function of the k-th gaussian at x
-        gaussian_density_k = np.exp(-0.5 * np.sum((X - means0[k]) @ inv(covs0[k]) * (X - means0[k]), axis=1))
-        gaussian_density_k /= np.sqrt((2 * np.pi) ** 2 * np.linalg.det(covs0[k]))
-        denum += weights0[k] * gaussian_density_k
-        for l in range(K1):
-            probas.append(w_star[k, l] * gaussian_density_k)
-
-    probas = np.array(probas)
-    probas = probas/denum
-
-    transports = []
-    for k in range(K0):
-        for l in range(K1):
-            transports_kl = compute_transport_gaussian(means0[k], covs0[k], means1[l], covs1[l], X)
-            transports.append(transports_kl)
-    transports = np.array(transports)
-
-    rng = np.random.default_rng()
-
-    X_transported = []
-    for i in range(len(X)):
-        point_1 = rng.choice(transports[:, :, i], p=probas[:,i])
-        X_transported.append(point_1)
-
-    X_transported = np.array(X_transported)
-
-    return X_transported
-
-def transport_gmm_rand_2(means0, covs0, weights0, means1, covs1, weights1, w_star, X):
-    """Transport a sample X from GMM 0 to GMM 1."""
-    K0, K1 = len(weights0), len(weights1)
-    N, D = X.shape  # N = number of points, D = data dimensionality
-
+    N, D = X.shape  # Number of points and data dimensionality
+    
     # Compute log-densities for numerical stability
-    log_densities = np.zeros((K0, N))
-    for k in range(K0):
-        mvn = multivariate_normal(mean=means0[k], cov=covs0[k])
-        log_densities[k] = mvn.logpdf(X)
+    log_densities = np.array([
+        multivariate_normal(mean=means0[k], cov=covs0[k]).logpdf(X) for k in range(K0)
+    ])  # Shape: (K0, N)
 
-    # Weighted log-sum-exp for p(x) to avoid underflow
-    log_weights = np.log(weights0)
-    log_denum = np.logaddexp.reduce(log_weights[:, None] + log_densities, axis=0)
+    # Compute log p(x) using logsumexp for stability
+    log_weights = np.log(weights0)[:, None]  # Shape: (K0, 1)
+    log_denum = logsumexp(log_weights + log_densities, axis=0)  # Shape: (N,)
 
-    # Compute log-probabilities for stability
-    log_probas = np.zeros((K0, K1, N))
-    for k in range(K0):
-        for l in range(K1):
-            log_probas[k, l] = np.log(w_star[k, l]) + log_densities[k] - log_denum
-
-    # Convert log-probabilities back to normal scale
-    probas = np.exp(log_probas)
+    # Compute log probabilities for stability
+    log_w_star = np.log(w_star + 1e-12)  # Add small value to prevent log(0)
+    log_probas = log_w_star[:, :, None] + log_densities[:, None, :] - log_denum[None, None, :]
     
-    probas = probas.reshape(K0 * K1, N)
+    # Convert to normal probabilities in a stable way
+    probas = np.exp(log_probas - logsumexp(log_probas, axis=(0, 1), keepdims=True))
 
-    # Compute all possible transport maps
-    transports = np.zeros((K0, K1, D, N))
-    for k in range(K0):
-        for l in range(K1):
-            transports[k, l] = compute_transport_gaussian(means0[k], covs0[k], means1[l], covs1[l], X)
-    
-    transports = transports.reshape(K0 * K1, D, N)
-
-    # Sample transported points for each X
+    # Memory-efficient transport map computation
+    X_transported = np.zeros((N, D))
     rng = np.random.default_rng()
-    X_transported = np.array([
-        rng.choice(transports[:, :, i], p=probas[:, i])
-        for i in range(N)
-    ])
+
+    for i in range(N):
+        # Sample (k, l) indices using probabilities
+        indices = np.unravel_index(rng.choice(K0 * K1, p=probas[:, :, i].ravel()), (K0, K1))
+        k, l = indices
+
+        # Compute transport for the chosen (k, l)
+        X_transported[i] = compute_transport_gaussian(means0[k], covs0[k], means1[l], covs1[l], X[i:i+1]).squeeze()
 
     return X_transported
+
 
 def fit_and_transport(X_1, X_2, n_comp_1=10, n_comp_2=10, method='rand'):
     """Fit two GMMs to the data and transport the first GMM to the second one."""

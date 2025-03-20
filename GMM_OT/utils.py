@@ -6,6 +6,7 @@ from sklearn.mixture import GaussianMixture
 from scipy.linalg import sqrtm, inv
 from torchvision import transforms
 import torchvision
+from IPython.display import display
 
 # generate a GMM dataset
 def generate_data(n_samples, n_classes, mu, sigma):
@@ -23,18 +24,30 @@ def generate_half_moons(n_samples, noise=0.1):
     X, _ = make_moons(n_samples, noise=noise)
     return X
 
-def plot_two_distrib(X1, X2):
-    plt.figure(figsize=(8, 4))
+def plot_two_distrib(X0, X1):
+    plt.figure(figsize=(12, 6))
+    
+    # Plot the first distribution
     plt.subplot(1, 2, 1)
-    plt.scatter(X1[:, 0], X1[:, 1])
-    plt.title('First distribution')
+    plt.scatter(X0[:, 0], X0[:, 1], color='blue', alpha=0.7, edgecolor='k')
+    plt.title('First Distribution', fontsize=14)
+    plt.xlabel('X1', fontsize=12)
+    plt.ylabel('X2', fontsize=12)
+    plt.grid(True)
+    
+    # Plot the second distribution
     plt.subplot(1, 2, 2)
-    plt.scatter(X2[:, 0], X2[:, 1])
-    plt.title('Second distribution')
+    plt.scatter(X1[:, 0], X1[:, 1], color='blue', alpha=0.7, edgecolor='k')
+    plt.title('Second Distribution', fontsize=14)
+    plt.xlabel('X1', fontsize=12)
+    plt.ylabel('X2', fontsize=12)
+    plt.grid(True)
+    
+    plt.tight_layout()
     plt.show()
 
 # Plot the original and transported distributions with arrows
-def plot_transport(X, X_transported):
+def plot_transport(X, X_transported, title="Transported Points Visualization"):
     plt.figure(figsize=(8, 6))
     
     # Plot original points
@@ -52,7 +65,7 @@ def plot_transport(X, X_transported):
     
     plt.xlabel("X1")
     plt.ylabel("X2")
-    plt.title("Transported Points Visualization")
+    plt.title(title)
     plt.legend()
     plt.grid()
     plt.show()
@@ -160,3 +173,26 @@ def imshow(img,size=None):
     display(pil_img)
     # print("Image size (h x w): ",  pil_img.height, "x", pil_img.width)
     return None
+
+def show_samples(y_1, y_2, y_3, y_4, num_samples=8, title="Generated AE Samples: Original 1 distribution (Top) vs. Transported 1 onto 6 (Bottom)"):
+    fig, axes = plt.subplots(4, num_samples, figsize=(num_samples * 2, 6))
+
+    for i in range(num_samples):
+        # WGAN sample
+        axes[0, i].imshow(y_1[i, 0].detach().cpu().numpy(), cmap='gray')
+        axes[0, i].axis('off')
+
+        # VAE sample
+        axes[1, i].imshow(y_2[i, 0].detach().cpu().numpy(), cmap='gray')
+        axes[1, i].axis('off')
+
+        # AE sample
+        axes[2, i].imshow(y_3[i, 0].detach().cpu().numpy(), cmap='gray')
+        axes[2, i].axis('off')
+
+        # Transported AE sample
+        axes[3, i].imshow(y_4[i, 0].detach().cpu().numpy(), cmap='gray')
+        axes[3, i].axis('off')
+
+    plt.suptitle(title, fontsize=30)
+    plt.show()
