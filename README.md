@@ -6,6 +6,10 @@ The experiments and theory are based on the paper https://hal.archives-ouvertes.
 
 ## Repository Structure
 
+- `gmmot.py`: Contains the main implementation of GMM Optimal Transport functions.
+- `utils.py`: Contains utility functions for visualizing some of the results and loading some datasets.
+- `GMM_OT.ipynb`: A Jupyter notebook containing our experiments and visualizations of GMM Optimal Transport.
+
 ## Setup
 
 1. Clone this repository:
@@ -23,7 +27,9 @@ source gmm_ot_env/bin/activate
 pip install -r requirements.txt
 ```
 
-3. Download the MNIST dataset and place it in the root directory of the repository
+3. Download the MNIST dataset and place it in the root directory of the repository:
+
+```bash
 
 
 
