@@ -32,8 +32,10 @@ pip install -r requirements.txt
 
 ```python
 transform = transforms.Compose([transforms.ToTensor(),transforms.Normalize((0.5,), (0.5,))])
-train_set = MNIST(MNIST_path, train=True, transform=transform, download=False)
+train_set = MNIST(MNIST_path, train=True, transform=transform, download=True)
 ``` 
+
+If you run the code again, just set `download=False`.
 
 
 
