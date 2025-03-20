@@ -10,3 +10,4 @@ torchvision
 POT
 
 pillow
+pickle
