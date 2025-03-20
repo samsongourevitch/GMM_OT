@@ -30,7 +30,10 @@ pip install -r requirements.txt
 
 3. Download the MNIST dataset and place it in the root directory of the repository:
 
-```bash
+```python
+transform = transforms.Compose([transforms.ToTensor(),transforms.Normalize((0.5,), (0.5,))])
+train_set = MNIST(MNIST_path, train=True, transform=transform, download=False)
+``` 
 
 
 
